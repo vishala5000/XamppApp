@@ -1,0 +1,48 @@
+name: Build Signed APK
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v3
+        with:
+          gradle-version: 8.2
+
+      - name: Generate Gradle wrapper
+        run: gradle wrapper --gradle-version 8.2
+
+      - name: Generate signing keystore
+        run: |
+          keytool -genkeypair -v -keystore app/release.keystore             -alias key -keyalg RSA -keysize 2048 -validity 10000             -storepass Xampp@2026 -keypass Xampp@2026             -dname "CN=Xampp, OU=Dev, O=Xampp, L=City, ST=State, C=US"
+
+      - name: Build unsigned APK
+        run: ./gradlew assembleRelease --no-daemon
+
+      - name: Sign with apksigner
+        run: |
+          BT=$(ls $ANDROID_HOME/build-tools/ | sort -V | tail -1)
+          APKSIGNER=$ANDROID_HOME/build-tools/$BT/apksigner
+          UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
+          SIGNED=app/build/outputs/apk/release/XamppApp-signed.apk
+          $APKSIGNER sign --ks app/release.keystore             --ks-pass pass:Xampp@2026 --key-pass pass:Xampp@2026             --ks-key-alias key --out $SIGNED $UNSIGNED
+          echo "=== Verify ==="
+          $APKSIGNER verify --verbose $SIGNED
+
+      - name: Upload signed APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: XamppApp-Signed-APK
+          path: app/build/outputs/apk/release/XamppApp-signed.apk
