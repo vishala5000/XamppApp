@@ -17,104 +17,98 @@ import com.google.android.material.button.MaterialButton
 
 class MainActivity : AppCompatActivity() {
 
+    // Screen 1: Main screen
+    private lateinit var screenMain: View
+    private lateinit var btnAddVideo: MaterialButton
+
+    // Screen 2: Preview screen
+    private lateinit var screenPreview: View
     private lateinit var textureView: TextureView
     private lateinit var videoView: VideoView
-    private lateinit var btnUpload: MaterialButton
-    private lateinit var layoutControls: View
-    private lateinit var layoutPreview: View
 
     private var cameraDevice: CameraDevice? = null
     private var captureSession: CameraCaptureSession? = null
+    private var pendingCameraOpen = false
     private val PICK_VIDEO = 1001
     private val REQ_CAMERA = 2001
     private val TAG = "XamppApp"
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        try {
-            setContentView(R.layout.activity_main)
+        setContentView(R.layout.activity_main)
 
-            textureView   = findViewById(R.id.textureView)
-            videoView     = findViewById(R.id.videoView)
-            btnUpload     = findViewById(R.id.btnUpload)
-            layoutControls= findViewById(R.id.layoutControls)
-            layoutPreview = findViewById(R.id.layoutPreview)
+        // Screen 1 views
+        screenMain   = findViewById(R.id.screenMain)
+        btnAddVideo  = findViewById(R.id.btnAddVideo)
 
-            // Ensure controls are visible and preview is hidden on start
-            layoutControls.visibility = View.VISIBLE
-            layoutPreview.visibility = View.GONE
+        // Screen 2 views
+        screenPreview = findViewById(R.id.screenPreview)
+        textureView   = findViewById(R.id.textureView)
+        videoView     = findViewById(R.id.videoView)
 
-            btnUpload.setOnClickListener {
-                val i = Intent(Intent.ACTION_PICK).apply { type = "video/*" }
-                startActivityForResult(i, PICK_VIDEO)
-            }
+        // Initial state: show main screen, hide preview
+        screenMain.visibility    = View.VISIBLE
+        screenPreview.visibility = View.GONE
 
-            textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
-                override fun onSurfaceTextureAvailable(s: SurfaceTexture, w: Int, h: Int) {
-                    Log.d(TAG, "SurfaceTexture available")
-                    // Only open camera if preview is visible
-                    if (layoutPreview.visibility == View.VISIBLE && hasCameraPermission()) {
-                        openCamera()
-                    }
+        btnAddVideo.setOnClickListener {
+            val i = Intent(Intent.ACTION_PICK).apply { type = "video/*" }
+            startActivityForResult(i, PICK_VIDEO)
+        }
+
+        textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+            override fun onSurfaceTextureAvailable(s: SurfaceTexture, w: Int, h: Int) {
+                Log.d(TAG, "SurfaceTexture available")
+                if (pendingCameraOpen) {
+                    pendingCameraOpen = false
+                    if (hasCameraPermission()) openCamera()
                 }
-                override fun onSurfaceTextureSizeChanged(s: SurfaceTexture, w: Int, h: Int) {}
-                override fun onSurfaceTextureDestroyed(s: SurfaceTexture) = true
-                override fun onSurfaceTextureUpdated(s: SurfaceTexture) {}
             }
-
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in onCreate", e)
+            override fun onSurfaceTextureSizeChanged(s: SurfaceTexture, w: Int, h: Int) {}
+            override fun onSurfaceTextureDestroyed(s: SurfaceTexture) = true
+            override fun onSurfaceTextureUpdated(s: SurfaceTexture) {}
         }
     }
 
-    private fun hasCameraPermission(): Boolean {
-        return try {
-            ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
-                    PackageManager.PERMISSION_GRANTED
-        } catch (e: Exception) {
-            Log.e(TAG, "Error checking permission", e)
-            false
-        }
-    }
+    private fun hasCameraPermission(): Boolean =
+        ActivityCompat.checkSelfPermission(this, Manifest.permission.CAMERA) ==
+                PackageManager.PERMISSION_GRANTED
 
     override fun onRequestPermissionsResult(rc: Int, perms: Array<out String>, res: IntArray) {
         super.onRequestPermissionsResult(rc, perms, res)
-        try {
-            if (rc == REQ_CAMERA && res.isNotEmpty() && res[0] == PackageManager.PERMISSION_GRANTED) {
-                Log.d(TAG, "Camera permission granted")
-                if (layoutPreview.visibility == View.VISIBLE && textureView.isAvailable) {
-                    openCamera()
-                }
-            } else {
-                Log.w(TAG, "Camera permission denied")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in onRequestPermissionsResult", e)
+        if (rc == REQ_CAMERA && res.isNotEmpty() && res[0] == PackageManager.PERMISSION_GRANTED) {
+            Log.d(TAG, "Camera permission granted")
+            if (textureView.isAvailable) openCamera()
+        } else {
+            Log.w(TAG, "Camera permission denied")
         }
     }
 
     override fun onActivityResult(rc: Int, result: Int, data: Intent?) {
         super.onActivityResult(rc, result, data)
-        try {
-            if (rc == PICK_VIDEO && result == RESULT_OK) {
-                data?.data?.let { uri ->
-                    layoutControls.visibility = View.GONE
-                    layoutPreview.visibility  = View.VISIBLE
-                    videoView.setVideoURI(uri)
-                    videoView.setOnPreparedListener { mp ->
-                        mp.isLooping = true
-                        mp.start()
-                    }
-                    // Open camera after switching to preview
-                    if (hasCameraPermission() && textureView.isAvailable) {
-                        openCamera()
-                    } else if (!hasCameraPermission()) {
+        if (rc == PICK_VIDEO && result == RESULT_OK) {
+            data?.data?.let { uri ->
+                // Switch screens
+                screenMain.visibility    = View.GONE
+                screenPreview.visibility = View.VISIBLE
+
+                // Start video loop
+                videoView.setVideoURI(uri)
+                videoView.setOnPreparedListener { mp ->
+                    mp.isLooping = true
+                    mp.start()
+                }
+
+                // Open camera (deferred if surface not ready)
+                if (textureView.isAvailable) {
+                    if (hasCameraPermission()) openCamera()
+                    else requestPermissions(arrayOf(Manifest.permission.CAMERA), REQ_CAMERA)
+                } else {
+                    pendingCameraOpen = true
+                    if (!hasCameraPermission()) {
                         requestPermissions(arrayOf(Manifest.permission.CAMERA), REQ_CAMERA)
                     }
                 }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in onActivityResult", e)
         }
     }
 
@@ -123,27 +117,18 @@ class MainActivity : AppCompatActivity() {
             Log.w(TAG, "No camera permission")
             return
         }
-
         try {
             val manager = getSystemService(CAMERA_SERVICE) as CameraManager
-            val cameraIdList = manager.cameraIdList
-            
-            if (cameraIdList.isEmpty()) {
-                Log.e(TAG, "No cameras available")
-                return
-            }
+            val ids = manager.cameraIdList
+            if (ids.isEmpty()) { Log.e(TAG, "No cameras"); return }
 
-            // Find front camera
-            var cameraId = cameraIdList[0]
-            for (id in cameraIdList) {
-                val characteristics = manager.getCameraCharacteristics(id)
-                val facing = characteristics.get(CameraCharacteristics.LENS_FACING)
-                if (facing == CameraCharacteristics.LENS_FACING_FRONT) {
-                    cameraId = id
-                    break
+            var cameraId = ids[0]
+            for (id in ids) {
+                val c = manager.getCameraCharacteristics(id)
+                if (c.get(CameraCharacteristics.LENS_FACING) == CameraCharacteristics.LENS_FACING_FRONT) {
+                    cameraId = id; break
                 }
             }
-
             Log.d(TAG, "Opening camera: $cameraId")
 
             manager.openCamera(cameraId, object : CameraDevice.StateCallback() {
@@ -152,76 +137,40 @@ class MainActivity : AppCompatActivity() {
                     cameraDevice = camera
                     startPreview()
                 }
-                override fun onDisconnected(camera: CameraDevice) {
-                    Log.w(TAG, "Camera disconnected")
-                    camera.close()
-                    cameraDevice = null
-                }
+                override fun onDisconnected(camera: CameraDevice) { camera.close(); cameraDevice = null }
                 override fun onError(camera: CameraDevice, error: Int) {
-                    Log.e(TAG, "Camera error: $error")
-                    camera.close()
-                    cameraDevice = null
+                    Log.e(TAG, "Camera error: $error"); camera.close(); cameraDevice = null
                 }
             }, null)
-        } catch (e: SecurityException) {
-            Log.e(TAG, "Security exception opening camera", e)
-        } catch (e: Exception) {
-            Log.e(TAG, "Error opening camera", e)
-        }
+        } catch (e: SecurityException) { Log.e(TAG, "Security exception", e) }
+          catch (e: Exception) { Log.e(TAG, "Error opening camera", e) }
     }
 
     private fun startPreview() {
         try {
-            val texture = textureView.surfaceTexture ?: run {
-                Log.e(TAG, "SurfaceTexture is null")
-                return
-            }
-            
-            val device = cameraDevice ?: run {
-                Log.e(TAG, "Camera device is null")
-                return
-            }
-
+            val texture = textureView.surfaceTexture ?: return
+            val device  = cameraDevice ?: return
             val surface = Surface(texture)
             val request = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
-                .apply { addTarget(surface) }
-                .build()
+                .apply { addTarget(surface) }.build()
 
-            device.createCaptureSession(
-                listOf(surface),
+            device.createCaptureSession(listOf(surface),
                 object : CameraCaptureSession.StateCallback() {
                     override fun onConfigured(session: CameraCaptureSession) {
-                        Log.d(TAG, "Camera configured")
                         captureSession = session
-                        try { 
-                            session.setRepeatingRequest(request, null, null) 
-                        } catch (e: CameraAccessException) { 
-                            Log.e(TAG, "Error starting preview", e)
-                        }
+                        try { session.setRepeatingRequest(request, null, null) }
+                        catch (e: CameraAccessException) { Log.e(TAG, "Preview error", e) }
                     }
                     override fun onConfigureFailed(session: CameraCaptureSession) {
-                        Log.e(TAG, "Camera configuration failed")
+                        Log.e(TAG, "Config failed")
                     }
-                }, null
-            )
-        } catch (e: Exception) {
-            Log.e(TAG, "Error in startPreview", e)
-        }
+                }, null)
+        } catch (e: Exception) { Log.e(TAG, "startPreview error", e) }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        try { 
-            captureSession?.close() 
-            captureSession = null
-        } catch (e: Exception) {
-            Log.e(TAG, "Error closing capture session", e)
-        }
-        try { 
-            cameraDevice?.close() 
-            cameraDevice = null
-        } catch (e: Exception) {
-            Log.e(TAG, "Error closing camera device", e)
-        }
+        try { captureSession?.close(); captureSession = null } catch (_: Exception) {}
+        try { cameraDevice?.close(); cameraDevice = null } catch (_: Exception) {}
     }
 }
