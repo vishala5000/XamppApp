@@ -40,6 +40,10 @@ class MainActivity : AppCompatActivity() {
             layoutControls= findViewById(R.id.layoutControls)
             layoutPreview = findViewById(R.id.layoutPreview)
 
+            // Ensure controls are visible and preview is hidden on start
+            layoutControls.visibility = View.VISIBLE
+            layoutPreview.visibility = View.GONE
+
             btnUpload.setOnClickListener {
                 val i = Intent(Intent.ACTION_PICK).apply { type = "video/*" }
                 startActivityForResult(i, PICK_VIDEO)
@@ -48,10 +52,9 @@ class MainActivity : AppCompatActivity() {
             textureView.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                 override fun onSurfaceTextureAvailable(s: SurfaceTexture, w: Int, h: Int) {
                     Log.d(TAG, "SurfaceTexture available")
-                    if (hasCameraPermission()) {
+                    // Only open camera if preview is visible
+                    if (layoutPreview.visibility == View.VISIBLE && hasCameraPermission()) {
                         openCamera()
-                    } else {
-                        requestPermissions(arrayOf(Manifest.permission.CAMERA), REQ_CAMERA)
                     }
                 }
                 override fun onSurfaceTextureSizeChanged(s: SurfaceTexture, w: Int, h: Int) {}
@@ -79,7 +82,7 @@ class MainActivity : AppCompatActivity() {
         try {
             if (rc == REQ_CAMERA && res.isNotEmpty() && res[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.d(TAG, "Camera permission granted")
-                if (textureView.isAvailable) {
+                if (layoutPreview.visibility == View.VISIBLE && textureView.isAvailable) {
                     openCamera()
                 }
             } else {
@@ -101,6 +104,12 @@ class MainActivity : AppCompatActivity() {
                     videoView.setOnPreparedListener { mp ->
                         mp.isLooping = true
                         mp.start()
+                    }
+                    // Open camera after switching to preview
+                    if (hasCameraPermission() && textureView.isAvailable) {
+                        openCamera()
+                    } else if (!hasCameraPermission()) {
+                        requestPermissions(arrayOf(Manifest.permission.CAMERA), REQ_CAMERA)
                     }
                 }
             }
