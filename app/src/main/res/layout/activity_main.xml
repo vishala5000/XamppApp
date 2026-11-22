@@ -5,37 +5,6 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- Preview layout: top = camera, bottom = video -->
-    <LinearLayout
-        android:id="@+id/layoutPreview"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:visibility="gone">
-
-        <!-- Top half: live front camera -->
-        <TextureView
-            android:id="@+id/textureView"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:background="#000000" />
-
-        <!-- Bottom half: uploaded video (1920x1080 fit without crop) -->
-        <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            android:layout_weight="1"
-            android:background="#000000">
-
-            <VideoView
-                android:id="@+id/videoView"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:layout_gravity="center" />
-        </FrameLayout>
-    </LinearLayout>
-
     <!-- Initial controls -->
     <LinearLayout
         android:id="@+id/layoutControls"
@@ -43,7 +12,8 @@
         android:layout_height="match_parent"
         android:gravity="center"
         android:orientation="vertical"
-        android:padding="32dp">
+        android:padding="32dp"
+        android:visibility="visible">
 
         <com.google.android.material.textview.MaterialTextView
             android:layout_width="wrap_content"
@@ -72,5 +42,35 @@
             android:paddingEnd="32dp"
             app:cornerRadius="16dp"
             app:backgroundTint="#1976D2" />
+    </LinearLayout>
+
+    <!-- Preview layout: top = camera, bottom = video -->
+    <LinearLayout
+        android:id="@+id/layoutPreview"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:visibility="gone">
+
+        <!-- Top half: live front camera -->
+        <TextureView
+            android:id="@+id/textureView"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1" />
+
+        <!-- Bottom half: uploaded video (1920x1080 fit without crop) -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="#000000">
+
+            <VideoView
+                android:id="@+id/videoView"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:layout_gravity="center" />
+        </FrameLayout>
     </LinearLayout>
 </FrameLayout>
